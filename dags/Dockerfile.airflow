@@ -1,0 +1,45 @@
+FROM apache/airflow:2.10.4
+
+USER root
+
+# Install uv from official image
+COPY --from=docker.io/astral/uv:latest /uv /uvx /bin/
+
+# Set timeout for heavy packages
+ENV UV_HTTP_TIMEOUT=300
+
+# Install system dependencies - Java needed for spark-submit
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    postgresql-client \
+    openjdk-17-jre-headless \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set Java home
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+
+# Copy package files first (for better caching)
+COPY --chown=airflow:root pyproject.toml setup.py /opt/anip/
+COPY --chown=airflow:root src/ /opt/anip/src/
+
+# Install anip package with airflow and ml extras using uv
+WORKDIR /opt/anip
+RUN uv pip install --system --python $(which python) -e ".[airflow,ml]" && \
+    python -c "import airflow.providers.apache.spark; print('✅ Spark provider installed')" && \
+    python -c "import pyspark; print('✅ PySpark installed')"
+
+# Copy setup scripts
+COPY --chown=airflow:root scripts/setup_airflow_connections.py /opt/anip/scripts/
+COPY --chown=airflow:root scripts/airflow_entrypoint.sh /opt/anip/scripts/
+COPY --chown=airflow:root scripts/webserver_config.py /opt/anip/scripts/
+RUN chmod +x /opt/anip/scripts/airflow_entrypoint.sh
+
+# Set PYTHONPATH to include anip source
+ENV PYTHONPATH="/opt/anip/src:${PYTHONPATH}"
+
+# Switch to airflow user
+USER airflow
+
+WORKDIR /opt/airflow
+

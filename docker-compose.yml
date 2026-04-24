@@ -1,0 +1,564 @@
+x-networks: &default-networks
+  networks:
+    - anip-net
+
+x-restart: &restart_policy
+  restart: unless-stopped
+
+# ── Log rotation: caps each container at 3 × 10 MB = 30 MB max ──
+x-logging: &logging
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+x-common: &common-config
+  networks:
+    - anip-net
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "3"
+  # restart: unless-stopped
+
+  # Common environment variables
+x-common-env: &common-env
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: ${POSTGRES_DB:-anip}
+  POSTGRES_USER: ${POSTGRES_USER}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  MLFLOW_TRACKING_URI: "http://mlflow:5000"
+  EMBEDDING_SERVICE_URL: "http://embedding-service:5003"
+
+x-airflow-env: &airflow-env
+  <<: *common-env
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@postgres:5432/${AIRFLOW_DB}
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+  AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "False"
+  AIRFLOW__LOGGING__LOGGING_LEVEL: "INFO"
+  AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "True"
+  AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "True"
+  AIRFLOW__WEBSERVER__CONFIG_FILE: "/opt/anip/scripts/webserver_config.py"
+  PYTHONPATH: "/opt/anip/src:/opt/anip:${PYTHONPATH:-}"
+  AIRFLOW_UID: ${AIRFLOW_UID:-50000}
+  # News API Keys
+  NEWSAPI_KEY: ${NEWSAPI_KEY:-}
+  NEWSDATA_KEY: ${NEWSDATA_KEY:-}
+  MEDIASTACK_KEY: ${MEDIASTACK_KEY:-}
+  THENEWSAPI_KEY: ${THENEWSAPI_KEY:-}
+  WORLDNEWS_KEY: ${WORLDNEWS_KEY:-}
+  USE_MODEL_SERVING: ${USE_MODEL_SERVING:-true}
+  CLASSIFICATION_SERVING_URL: ${CLASSIFICATION_SERVING_URL:-http://model-serving-classification:5001}
+  SENTIMENT_SERVING_URL: ${SENTIMENT_SERVING_URL:-http://model-serving-sentiment:5002}
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: anip-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-anip}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - ./volumes/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    <<: *common-config
+
+  # One-time init to create both DBs (anip + airflow)
+  pg-init:
+    image: pgvector/pgvector:pg16
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    command: >
+      bash -c " psql -h postgres -U ${POSTGRES_USER} -tc \"SELECT 1 FROM pg_database WHERE datname='${AIRFLOW_DB}'\" | grep -q 1 || psql -h postgres -U ${POSTGRES_USER} -c \"CREATE DATABASE ${AIRFLOW_DB}\"; psql -h postgres -U ${POSTGRES_USER} -tc \"SELECT 1 FROM pg_roles WHERE rolname='${AIRFLOW_DB_USER}'\" | grep -q 1 || psql -h postgres -U ${POSTGRES_USER} -c \"CREATE USER ${AIRFLOW_DB_USER} WITH PASSWORD '${AIRFLOW_DB_PASSWORD}'\"; psql -h postgres -U ${POSTGRES_USER} -c \"GRANT ALL PRIVILEGES ON DATABASE ${AIRFLOW_DB} TO ${AIRFLOW_DB_USER}\"; psql -h postgres -U ${POSTGRES_USER} -d ${AIRFLOW_DB} -c \"GRANT ALL ON SCHEMA public TO ${AIRFLOW_DB_USER}\"; psql -h postgres -U ${POSTGRES_USER} -d ${AIRFLOW_DB} -c \"GRANT CREATE ON SCHEMA public TO ${AIRFLOW_DB_USER}\"; psql -h postgres -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c \"CREATE EXTENSION IF NOT EXISTS vector\"; psql -h postgres -U ${POSTGRES_USER} -d ${AIRFLOW_DB} -c \"CREATE EXTENSION IF NOT EXISTS vector\"; echo 'Init done with pgvector enabled.' "
+    <<: *default-networks
+
+  spark-master:
+    build:
+      context: .
+      dockerfile: spark/Dockerfile
+    container_name: spark-master
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+    ports:
+      - "${SPARK_MASTER_RPC_PORT:-7077}:7077"
+      - "${SPARK_MASTER_WEB_PORT:-8080}:8080"
+    environment:
+      <<: *common-env
+      SPARK_RPC_AUTHENTICATION_ENABLED: "no"
+      SPARK_RPC_ENCRYPTION_ENABLED: "no"
+      SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED: "no"
+      SPARK_SSL_ENABLED: "no"
+      USE_MODEL_SERVING: ${USE_MODEL_SERVING:-true}
+      CLASSIFICATION_SERVING_URL: ${CLASSIFICATION_SERVING_URL:-http://model-serving-classification:5001}
+      SENTIMENT_SERVING_URL: ${SENTIMENT_SERVING_URL:-http://model-serving-sentiment:5002}
+    volumes:
+      - ./src/anip:/opt/anip/src/anip:ro
+      - ./volumes/mlruns:/mlruns
+      - ./spark:/opt/anip/spark:ro
+    <<: *common-config
+
+  spark-worker:
+    build:
+      context: .
+      dockerfile: spark/Dockerfile
+    container_name: spark-worker
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    depends_on:
+      - spark-master
+    ports:
+      - "${SPARK_WORKER_WEB_PORT:-8081}:8081"
+    environment:
+      <<: *common-env
+      SPARK_WORKER_MEMORY: 2g
+      SPARK_WORKER_CORES: 2
+      SPARK_RPC_AUTHENTICATION_ENABLED: "no"
+      SPARK_RPC_ENCRYPTION_ENABLED: "no"
+      SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED: "no"
+      SPARK_SSL_ENABLED: "no"
+      USE_MODEL_SERVING: ${USE_MODEL_SERVING:-true}
+      CLASSIFICATION_SERVING_URL: ${CLASSIFICATION_SERVING_URL:-http://model-serving-classification:5001}
+      SENTIMENT_SERVING_URL: ${SENTIMENT_SERVING_URL:-http://model-serving-sentiment:5002}
+    volumes:
+      - ./src/anip:/opt/anip/src/anip:ro
+      - ./volumes/mlruns:/mlruns
+      - ./spark:/opt/anip/spark:ro
+    <<: *common-config
+
+  mlflow:
+    build:
+      context: ./services/mlflow
+    container_name: anip-mlflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${MLFLOW_PORT:-5000}:5000"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-anip}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    command: >
+      mlflow server --backend-store-uri postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB} --default-artifact-root /mlruns --host 0.0.0.0 --port 5000
+    volumes:
+      - ./volumes/mlruns:/mlruns
+    <<: *common-config
+
+  model-serving-classification:
+    build:
+      context: ./services/mlflow
+    container_name: anip-model-serving-classification
+    depends_on:
+      mlflow:
+        condition: service_started
+    ports:
+      - "${CLASSIFICATION_SERVING_PORT:-5001}:5001"
+    environment:
+      <<: *common-env
+      MODEL_URI: "models:/topic-classification/Production"
+      MODEL_NAME: "topic-classification"
+      HOST: "0.0.0.0"
+      PORT: "5001"
+    command: python /mlflow/model_server.py
+    volumes:
+      - ./volumes/mlruns:/mlruns
+      - ./src/anip:/opt/anip/src/anip:ro
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:5001/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    <<: *common-config
+
+  model-serving-sentiment:
+    build:
+      context: ./services/mlflow
+    container_name: anip-model-serving-sentiment
+    depends_on:
+      mlflow:
+        condition: service_started
+    ports:
+      - "${SENTIMENT_SERVING_PORT:-5002}:5002"
+    environment:
+      <<: *common-env
+      MODEL_URI: "models:/sentiment-analysis/Production"
+      MODEL_NAME: "sentiment-analysis"
+      HOST: "0.0.0.0"
+      PORT: "5002"
+    command: python /mlflow/model_server.py
+    volumes:
+      - ./volumes/mlruns:/mlruns
+      - ./src/anip:/opt/anip/src/anip:ro
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:5002/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    <<: *common-config
+
+  embedding-service:
+    build:
+      context: ./services/embedding
+    container_name: anip-embedding-service
+    ports:
+      - "${EMBEDDING_SERVICE_PORT:-5003}:5003"
+    environment:
+      PYTHONUNBUFFERED: "1"
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import requests; requests.get('http://localhost:5003/health', timeout=5)" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    <<: *common-config
+
+  airflow-init:
+    build:
+      context: .
+      dockerfile: dags/Dockerfile.airflow
+    container_name: anip-airflow-init
+    depends_on:
+      pg-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *airflow-env
+    user: "${AIRFLOW_UID:-50000}:${AIRFLOW_GID:-0}"
+    entrypoint: /bin/bash
+    command: -c "airflow db upgrade && airflow users create --role Admin --username ${AIRFLOW_ADMIN_USER:-admin} --password ${AIRFLOW_ADMIN_PASSWORD:-admin} --firstname Admin --lastname User --email ${AIRFLOW_ADMIN_EMAIL:-admin@example.com} || true"
+    volumes:
+      - ./src/anip:/opt/anip/src/anip:ro
+      - ./volumes/mlruns:/mlruns
+      - ./dags:/opt/airflow/dags:ro
+      - ./spark:/opt/anip/spark:ro
+      - ./volumes/airflow/logs:/opt/airflow/logs
+      - ./volumes/airflow/plugins:/opt/airflow/plugins
+    <<: *default-networks
+
+  airflow-scheduler:
+    build:
+      context: .
+      dockerfile: dags/Dockerfile.airflow
+    container_name: anip-airflow-scheduler
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      spark-master:
+        condition: service_started
+    environment:
+      <<: *airflow-env
+    user: "${AIRFLOW_UID:-50000}:${AIRFLOW_GID:-0}"
+    entrypoint: [ "/opt/anip/scripts/airflow_entrypoint.sh" ]
+    command: [ "airflow", "scheduler" ]
+    volumes:
+      - ./src/anip:/opt/anip/src/anip:ro
+      - ./volumes/mlruns:/mlruns
+      - ./dags:/opt/airflow/dags:ro
+      - ./spark:/opt/anip/spark:ro
+      - ./volumes/airflow/logs:/opt/airflow/logs
+      - ./volumes/airflow/plugins:/opt/airflow/plugins
+    <<: *common-config
+
+  airflow-webserver:
+    build:
+      context: .
+      dockerfile: dags/Dockerfile.airflow
+    container_name: anip-airflow-webserver
+    depends_on:
+      airflow-scheduler:
+        condition: service_started
+    environment:
+      <<: *airflow-env
+    user: "${AIRFLOW_UID:-50000}:${AIRFLOW_GID:-0}"
+    ports:
+      - "${AIRFLOW_WEB_PORT:-8080}:8080"
+    entrypoint: [ "/opt/anip/scripts/airflow_entrypoint.sh" ]
+    command: [ "airflow", "webserver" ]
+    volumes:
+      - ./src/anip:/opt/anip/src/anip:ro
+      - ./volumes/mlruns:/mlruns
+      - ./dags:/opt/airflow/dags:ro
+      - ./spark:/opt/anip/spark:ro
+      - ./volumes/airflow/logs:/opt/airflow/logs
+      - ./volumes/airflow/plugins:/opt/airflow/plugins
+    <<: *common-config
+
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    container_name: anip-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      <<: *common-env
+      # News API Keys
+      NEWSAPI_KEY: ${NEWSAPI_KEY:-}
+      NEWSDATA_KEY: ${NEWSDATA_KEY:-}
+      MEDIASTACK_KEY: ${MEDIASTACK_KEY:-}
+      THENEWSAPI_KEY: ${THENEWSAPI_KEY:-}
+      WORLDNEWS_KEY: ${WORLDNEWS_KEY:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      USE_MODEL_SERVING: ${USE_MODEL_SERVING:-true}
+      CLASSIFICATION_SERVING_URL: ${CLASSIFICATION_SERVING_URL:-http://model-serving-classification:5001}
+      SENTIMENT_SERVING_URL: ${SENTIMENT_SERVING_URL:-http://model-serving-sentiment:5002}
+      # Gemini (PydanticAI expects GOOGLE_API_KEY). GEMINI_API_KEY is supported too.
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-${GEMINI_API_KEY:-}}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      REDIS_URL: "redis://redis:6379/0"
+      KAFKA_BOOTSTRAP_SERVERS: "redpanda:9092"
+      AI_BOT_TOKEN: ${AI_BOT_TOKEN:-anip-ai-bot-secret-2024}
+    volumes:
+      - ./src/anip:/opt/anip/src/anip:ro
+      - ./volumes/mlruns:/mlruns
+      - ./services/api/app:/opt/anip/services/api/app
+    ports:
+      - "${API_PORT:-8000}:8000"
+    <<: *common-config
+
+  # --- SOCIAL PLATFORM EXTENSIONS ---
+
+  redis:
+    image: redis:7-alpine
+    container_name: anip-redis
+    ports:
+      - "6379:6379"
+    <<: [ *common-config, *logging ]
+
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v23.2.1
+    container_name: anip-redpanda
+    command:
+      - redpanda start
+      - --smp 1
+      - --overprovisioned
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --pandaproxy-addr 0.0.0.0:8082
+      - --advertise-pandaproxy-addr localhost:8082
+    ports:
+      - "19092:19092"
+      - "8082:8082"
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep 'Healthy:.*true'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    <<: *common-config
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: anip-frontend
+    # depends_on: [api] -- Removed to allow local API orchestration
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: "http://api:8000"
+      WATCHPACK_POLLING: "true"
+    volumes:
+      - ./frontend/app:/app/app
+      - ./frontend/lib:/app/lib
+      - ./frontend/components:/app/components
+      - ./frontend/tailwind.config.ts:/app/tailwind.config.ts
+      - ./frontend/postcss.config.js:/app/postcss.config.js
+      - ./frontend/package.json:/app/package.json
+      - ./frontend/next.config.js:/app/next.config.js
+    <<: *common-config
+
+  # ============================================================
+  # AUTONOMOUS AI SCRAPER SWARM
+  # Each scraper runs independently, posting every 1-5 minutes
+  # ============================================================
+
+  x-scraper-common: &scraper-common
+    build:
+      context: ./backend/scrapers
+    environment:
+      API_URL: "http://api:8000"
+      AI_BOT_TOKEN: ${AI_BOT_TOKEN:-anip-ai-bot-secret-2024}
+      KAFKA_BOOTSTRAP_SERVERS: "redpanda:9092"
+    depends_on:
+      - api
+      - redpanda
+    restart: unless-stopped
+    networks:
+      - anip-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  scraper-hackernews:
+    <<: *scraper-common
+    container_name: anip-scraper-hackernews
+    command: python hackernews_scraper.py
+
+  scraper-reddit:
+    <<: *scraper-common
+    container_name: anip-scraper-reddit
+    command: python reddit_scraper.py
+
+  scraper-github:
+    <<: *scraper-common
+    container_name: anip-scraper-github
+    command: python github_scraper.py
+
+  scraper-wikipedia:
+    <<: *scraper-common
+    container_name: anip-scraper-wikipedia
+    command: python wikipedia_scraper.py
+
+  scraper-google-trends:
+    <<: *scraper-common
+    container_name: anip-scraper-google-trends
+    command: python google_trends.py
+
+  scraper-producthunt:
+    <<: *scraper-common
+    container_name: anip-scraper-producthunt
+    command: python producthunt_scraper.py
+    environment:
+      API_URL: "http://api:8000"
+      AI_BOT_TOKEN: ${AI_BOT_TOKEN:-anip-ai-bot-secret-2024}
+      KAFKA_BOOTSTRAP_SERVERS: "redpanda:9092"
+      PRODUCT_HUNT_TOKEN: ${PRODUCT_HUNT_TOKEN:-}
+
+  scraper-newsapi:
+    <<: *scraper-common
+    container_name: anip-scraper-newsapi
+    command: python newsapi_aggregator.py
+    environment:
+      API_URL: "http://api:8000"
+      AI_BOT_TOKEN: ${AI_BOT_TOKEN:-anip-ai-bot-secret-2024}
+      KAFKA_BOOTSTRAP_SERVERS: "redpanda:9092"
+      NEWSAPI_KEY: ${NEWSAPI_KEY:-}
+
+  # AI Content Filter Pipeline
+  ai-content-filter:
+    build:
+      context: ./backend/ai_pipeline
+    container_name: anip-ai-content-filter
+    command: python content_filter.py
+    environment:
+      API_URL: "http://api:8000"
+      AI_BOT_TOKEN: ${AI_BOT_TOKEN:-anip-ai-bot-secret-2024}
+      KAFKA_BOOTSTRAP_SERVERS: "redpanda:9092"
+      EMBEDDING_SERVICE_URL: "http://embedding-service:5003"
+    depends_on:
+      api:
+        condition: service_started
+      redpanda:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - anip-net
+
+  # AI Auto-Poster Orchestrator (Kafka → filter → summarize → post)
+  ai-auto-poster:
+    build:
+      context: ./backend/ai_pipeline
+    container_name: anip-ai-auto-poster
+    command: python auto_poster.py
+    environment:
+      API_URL: "http://api:8000"
+      AI_BOT_TOKEN: ${AI_BOT_TOKEN:-anip-ai-bot-secret-2024}
+      KAFKA_BOOTSTRAP_SERVERS: "redpanda:9092"
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-${GEMINI_API_KEY:-}}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+    depends_on:
+      - api
+      - redpanda
+      - ai-content-filter
+    restart: unless-stopped
+    networks:
+      - anip-net
+
+  # YouTube scraper (free with API key; RSS fallback if no key)
+  scraper-youtube:
+    <<: *scraper-common
+    container_name: anip-scraper-youtube
+    command: python youtube_scraper.py
+    environment:
+      API_URL: "http://api:8000"
+      AI_BOT_TOKEN: ${AI_BOT_TOKEN:-anip-ai-bot-secret-2024}
+      KAFKA_BOOTSTRAP_SERVERS: "redpanda:9092"
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
+
+  # X/Twitter scraper (requires Bearer Token for API; ntscraper fallback)
+  scraper-x:
+    <<: *scraper-common
+    container_name: anip-scraper-x
+    command: python x_scraper.py
+    environment:
+      API_URL: "http://api:8000"
+      AI_BOT_TOKEN: ${AI_BOT_TOKEN:-anip-ai-bot-secret-2024}
+      KAFKA_BOOTSTRAP_SERVERS: "redpanda:9092"
+      TWITTER_BEARER_TOKEN: ${TWITTER_BEARER_TOKEN:-}
+
+  # LinkedIn scraper (RSS fallback; OAuth for full API)
+  scraper-linkedin:
+    <<: *scraper-common
+    container_name: anip-scraper-linkedin
+    command: python linkedin_scraper.py
+    environment:
+      API_URL: "http://api:8000"
+      AI_BOT_TOKEN: ${AI_BOT_TOKEN:-anip-ai-bot-secret-2024}
+      KAFKA_BOOTSTRAP_SERVERS: "redpanda:9092"
+      LINKEDIN_ACCESS_TOKEN: ${LINKEDIN_ACCESS_TOKEN:-}
+
+  # Indian & Tamil Nadu specific scrapers
+  scraper-indian-news:
+    <<: *scraper-common
+    container_name: anip-scraper-indian-news
+    command: python indian_news_scraper.py
+    environment:
+      API_URL: "http://api:8000"
+      AI_BOT_TOKEN: ${AI_BOT_TOKEN:-anip-ai-bot-secret-2024}
+      KAFKA_BOOTSTRAP_SERVERS: "redpanda:9092"
+
+  scraper-tamil-news:
+    <<: *scraper-common
+    container_name: anip-scraper-tamil-news
+    command: python tamil_news_scraper.py
+    environment:
+      API_URL: "http://api:8000"
+      AI_BOT_TOKEN: ${AI_BOT_TOKEN:-anip-ai-bot-secret-2024}
+      KAFKA_BOOTSTRAP_SERVERS: "redpanda:9092"
+
+  # Regional News Scraper - Fetches state-specific news using APIs
+  scraper-regional-news:
+    <<: *scraper-common
+    container_name: anip-scraper-regional-news
+    command: python regional_news_scraper.py
+    environment:
+      API_URL: "http://api:8000"
+      AI_BOT_TOKEN: ${AI_BOT_TOKEN:-anip-ai-bot-secret-2024}
+      KAFKA_BOOTSTRAP_SERVERS: "redpanda:9092"
+      NEWSAPI_KEY: ${NEWSAPI_KEY:-}
+      NEWSDATA_KEY: ${NEWSDATA_KEY:-}
+      THENEWSAPI_KEY: ${THENEWSAPI_KEY:-}
+
+networks:
+  anip-net:
+    driver: bridge

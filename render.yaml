@@ -1,0 +1,67 @@
+services:
+  # Database
+  - type: database
+    name: anip-db
+    databaseName: anip
+    user: anip_user
+    plan: free # Change to starter or higher if needed
+
+  # Redis
+  - type: redis
+    name: anip-redis
+    plan: free # Change to starter or higher if needed
+    ipAllowList: [] # Only allow internal connections
+
+  # Backend (API)
+  - type: web
+    name: anip-api
+    env: docker
+    dockerContext: .
+    dockerfilePath: services/api/Dockerfile
+    plan: free
+    healthCheckPath: /health # Verify if this exists in the app
+    envVars:
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: anip-db
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: anip-db
+          property: port
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: anip-db
+          property: database
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: anip-db
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: anip-db
+          property: password
+      - key: REDIS_URL
+        fromRedis:
+          name: anip-redis
+          property: connectionString
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: GOOGLE_API_KEY
+        sync: false # User must set this in Render dashboard
+      - key: GEMINI_MODEL
+        value: "gemini-2.5-flash"
+
+  # Frontend
+  - type: web
+    name: anip-frontend
+    env: docker
+    dockerContext: ./frontend
+    dockerfilePath: frontend/Dockerfile
+    plan: free
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          name: anip-api
+          type: web
+          property: url
