@@ -4,13 +4,12 @@ databases:
     user: anip_user
     plan: free
 
-services:
-  # Redis
-  - type: redis
-    name: anip-redis
+redis:
+  - name: anip-redis
     plan: free
     ipAllowList: []
 
+services:
   # Backend (API)
   - type: web
     name: anip-api
