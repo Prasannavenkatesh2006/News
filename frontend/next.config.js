@@ -7,6 +7,10 @@ const nextConfig = {
     typescript: {
         ignoreBuildErrors: true,
     },
+    experimental: {
+        workerThreads: false,
+        cpus: 1,
+    },
     async rewrites() {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
         return [
