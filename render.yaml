@@ -43,8 +43,9 @@ services:
           name: anip-db
           property: password
       - key: REDIS_URL
-        fromRedis:
+        fromService:
           name: anip-redis
+          type: redis
           property: connectionString
       - key: CORS_ORIGINS
         value: "*"
