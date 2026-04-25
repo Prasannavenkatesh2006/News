@@ -4,14 +4,15 @@ databases:
     user: anip_user
     plan: free
 
-redis:
-  - name: anip-redis
+services:
+  # Redis
+  - type: redis
+    name: anip-redis
     plan: free
     ipAllowList:
       - cidr: 0.0.0.0/0
         description: Allow all
 
-services:
   # Backend (API)
   - type: web
     name: anip-api
