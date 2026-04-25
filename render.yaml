@@ -7,7 +7,6 @@ databases:
 redis:
   - name: anip-redis
     plan: free
-    ipAllowList: []
 
 services:
   # Backend (API)
