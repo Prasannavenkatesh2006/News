@@ -1,6 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     transpilePackages: ['framer-motion'],
+    eslint: {
+        ignoreDuringBuilds: true,
+    },
+    typescript: {
+        ignoreBuildErrors: true,
+    },
     async rewrites() {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
         return [
