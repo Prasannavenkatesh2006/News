@@ -14,7 +14,8 @@ import {
     Hash, 
     ChevronLeft,
     Send,
-    Loader2
+    Loader2,
+    X
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -37,7 +38,7 @@ function CommentNode({ comment, postId, depth = 0, onReply }: {
 
     const handleVote = async (type: 1 | -1) => {
         try {
-            const r = await voteComment(comment.id, type);
+            const r = await voteComment(comment.id, { vote_type: type });
             setVotes({ up: r.upvotes, down: r.downvotes });
             setVoted(voted === type ? null : type);
         } catch { }
@@ -105,9 +106,10 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
         }).catch(() => { }).finally(() => setLoading(false));
     }, [params.id]);
 
-    const handleVote = async (type: 1 | -1) => {
+    const handleVote = async (e: React.MouseEvent, type: 1 | -1) => {
+        e.preventDefault();
         try {
-            const r = await votePost(params.id, type);
+            const r = await votePost(params.id, { vote_type: type });
             setVotes({ up: r.upvotes, down: r.downvotes });
             setVoted(voted === type ? null : type);
         } catch { }
@@ -124,7 +126,7 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
         if (!newComment.trim()) return;
         setSubmitting(true);
         try {
-            const c = await createComment(params.id, newComment, replyTo?.id);
+            const c = await createComment(params.id, { content: newComment, parent_id: replyTo?.id });
             setNewComment('');
             setReplyTo(null);
             const fresh = await getComments(params.id);
@@ -174,11 +176,11 @@ export default function PostDetailPage({ params }: { params: { id: string } }) {
                 <div className="bg-white border border-slate-100 rounded-[40px] p-10 shadow-2xl shadow-slate-200/50 relative overflow-hidden mb-10">
                     <div className="absolute top-0 right-0 p-8">
                         <div className="flex flex-col items-center gap-2 bg-slate-50 rounded-2xl p-2 border border-slate-100">
-                            <button onClick={() => handleVote(1)} className={`p-2 rounded-xl transition-all ${voted === 1 ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-400 hover:bg-emerald-50'}`}>
+                            <button onClick={(e) => handleVote(e, 1)} className={`p-2 rounded-xl transition-all ${voted === 1 ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-400 hover:bg-emerald-50'}`}>
                                 <ArrowUp size={20} />
                             </button>
                             <span className={`text-lg font-black ${score > 0 ? 'text-emerald-600' : score < 0 ? 'text-rose-600' : 'text-slate-900'}`}>{score}</span>
-                            <button onClick={() => handleVote(-1)} className={`p-2 rounded-xl transition-all ${voted === -1 ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'text-slate-400 hover:bg-rose-50'}`}>
+                            <button onClick={(e) => handleVote(e, -1)} className={`p-2 rounded-xl transition-all ${voted === -1 ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'text-slate-400 hover:bg-rose-50'}`}>
                                 <ArrowDown size={20} />
                             </button>
                         </div>

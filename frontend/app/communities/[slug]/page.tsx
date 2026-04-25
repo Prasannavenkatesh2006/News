@@ -61,7 +61,7 @@ function PostCard({ post }: { post: Post }) {
     const handleVote = async (e: React.MouseEvent, type: 1 | -1) => {
         e.preventDefault();
         try {
-            const r = await votePost(post.id, type);
+            const r = await votePost(post.id, { vote_type: type });
             setVotes({ up: r.upvotes, down: r.downvotes });
             setVoted(voted === type ? null : type);
         } catch { }

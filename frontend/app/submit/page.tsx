@@ -30,7 +30,7 @@ export default function SubmitPage() {
         setLoading(true);
         setError('');
         try {
-            await createPost(title, content || undefined, communityId);
+            await createPost({ title, content: content || undefined, community_id: Number(communityId) });
             window.location.href = '/';
         } catch (err: any) {
             setError(err.message || 'Failed to create post. Please ensure you are logged in.');

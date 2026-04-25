@@ -5,7 +5,7 @@ import { useLiveFeed, getScraperStats, AutoPost } from '@/lib/websocket';
 import Sidebar from '../components/Sidebar';
 import { 
     Zap, 
-    Robot, 
+    Bot, 
     CheckCircle, 
     Activity, 
     TrendingUp, 
@@ -139,7 +139,7 @@ export default function DashboardPage() {
                     <div>
                         <div className="flex items-center gap-3 mb-2">
                             <div className="w-12 h-12 rounded-2xl bg-slate-900 flex items-center justify-center shadow-lg shadow-slate-900/10">
-                                <Activity className="w-6 h-6 text-white" />
+                                <Bot size={20} className="text-white" />
                             </div>
                             <h1 className="text-3xl font-black text-slate-900 tracking-tight">AI Command Center</h1>
                         </div>
