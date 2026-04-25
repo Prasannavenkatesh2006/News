@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { getFeed } from '@/lib/api';
 import Sidebar from '../components/Sidebar';
 import { Globe, TrendingUp, Loader2, Filter } from 'lucide-react';
 
@@ -42,10 +43,7 @@ export default function WorldNewsPage() {
     const fetchNews = async () => {
         try {
             setError(null);
-            const url = `/api/v1/social/feed?limit=100`;
-            const res = await fetch(url);
-            if (!res.ok) throw new Error('Failed to fetch');
-            const data: Article[] = await res.json();
+            const data = await getFeed({ limit: 100 });
             setArticles(data);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Could not load articles');

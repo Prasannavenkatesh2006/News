@@ -2,6 +2,7 @@
 
 import { ArticleCard } from '@/components/ArticleCard';
 import { useQuery } from '@tanstack/react-query';
+import { getFeed } from '@/lib/api';
 import { MapPin, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import Sidebar from '../components/Sidebar';
@@ -23,10 +24,8 @@ export default function IndiaPage() {
   const { data: posts, isLoading } = useQuery({
     queryKey: ['india-news', selectedState],
     queryFn: async () => {
-      const stateParam = selectedState === 'All India' ? '' : `&state=${encodeURIComponent(selectedState)}`;
-      const res = await fetch(`/api/v1/social/feed?country=India${stateParam}&limit=100`);
-      if (!res.ok) throw new Error('Network response was not ok');
-      return res.json();
+      const state = selectedState === 'All India' ? undefined : selectedState;
+      return getFeed({ country: 'India', state, limit: 100 });
     },
     refetchInterval: 30000
   });

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { getFeed } from '@/lib/api';
 import Sidebar from '../components/Sidebar';
 import { MapPin, TrendingUp, Filter, Loader2, ChevronRight, Share2, Bookmark } from 'lucide-react';
 import Link from 'next/link';
@@ -58,10 +59,8 @@ export default function WestBengalPage() {
     const fetchNews = async () => {
         try {
             setError(null);
-            const url = `/api/v1/social/feed?state=West Bengal&country=India&limit=80`;
-            const res = await fetch(url);
-            if (!res.ok) throw new Error('Failed to fetch');
-            const data: Article[] = await res.json();
+            setError(null);
+            const data = await getFeed({ state: 'West Bengal', country: 'India', limit: 80 });
             setArticles(data);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Could not load articles');

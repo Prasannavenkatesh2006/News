@@ -83,6 +83,17 @@ export async function getPosts(communitySlug?: string, offset = 0, limit = 20) {
     return apiFetch(`${path}?${params.toString()}`);
 }
 
+export async function getFeed(options: { sort?: string; limit?: number; offset?: number; country?: string; state?: string } = {}) {
+    const params = new URLSearchParams();
+    if (options.sort) params.append('sort', options.sort);
+    if (options.limit) params.append('limit', options.limit.toString());
+    if (options.offset) params.append('offset', options.offset.toString());
+    if (options.country) params.append('country', options.country);
+    if (options.state) params.append('state', options.state);
+    
+    return apiFetch(`/api/v1/social/feed?${params.toString()}`);
+}
+
 export async function getPost(postId: string) {
     return apiFetch(`/api/v1/social/posts/${postId}`);
 }

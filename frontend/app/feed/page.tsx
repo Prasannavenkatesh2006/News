@@ -2,6 +2,7 @@
 
 import { ArticleCard } from '@/components/ArticleCard';
 import { useInfiniteQuery } from '@tanstack/react-query';
+import { getFeed } from '@/lib/api';
 import { Loader2, TrendingUp, Clock, Filter } from 'lucide-react';
 import { useState } from 'react';
 import Sidebar from '../components/Sidebar';
@@ -12,9 +13,7 @@ export default function FeedPage() {
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useInfiniteQuery({
     queryKey: ['feed', sortBy],
     queryFn: async ({ pageParam = 0 }) => {
-      const res = await fetch(`/api/v1/social/feed?sort=${sortBy}&offset=${pageParam}&limit=20`);
-      if (!res.ok) throw new Error('Network response was not ok');
-      return res.json();
+      return getFeed({ sort: sortBy, offset: pageParam as number, limit: 20 });
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage, pages) => {
