@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 import uuid
 
 from anip.shared.database import get_db_session
-from anip.shared.models.social import User
+from anip.shared.models.social import User, UserSettings
 
 # Configuration - Move to settings later
 SECRET_KEY = "anip-social-super-secret-key"
@@ -27,6 +27,7 @@ class UserCreate(BaseModel):
     username: str
     email: EmailStr
     password: str
+    phone_number: Optional[str] = None
 
 class UserResponse(BaseModel):
     id: uuid.UUID
@@ -71,17 +72,30 @@ def register(user_in: UserCreate):
         user = User(
             username=user_in.username,
             email=user_in.email,
-            password_hash=get_password_hash(user_in.password)
+            password_hash=get_password_hash(user_in.password),
+            phone_number=user_in.phone_number
         )
         db.add(user)
         db.commit()
         db.refresh(user)
+
+        # Create user settings
+        whatsapp_enabled = bool(user_in.phone_number and user_in.phone_number.strip())
+        settings = UserSettings(
+            user_id=user.id,
+            whatsapp_notifications=whatsapp_enabled
+        )
+        db.add(settings)
+        db.commit()
+
         return user
 
 @router.post("/login", response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends()):
     with get_db_session() as db:
-        user = db.query(User).filter(User.username == form_data.username).first()
+        user = db.query(User).filter(
+            (User.username == form_data.username) | (User.email == form_data.username)
+        ).first()
         if not user or not verify_password(form_data.password, user.password_hash):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

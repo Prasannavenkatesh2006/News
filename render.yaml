@@ -48,9 +48,33 @@ services:
       - key: CORS_ORIGINS
         value: "*"
       - key: GOOGLE_API_KEY
-        sync: false # User must set this in Render dashboard
+        sync: false 
       - key: GEMINI_MODEL
         value: "gemini-2.5-flash"
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_WHATSAPP_NUMBER
+        sync: false
+
+  # Scrapers (Background Worker)
+  - type: worker
+    name: anip-scrapers
+    env: python
+    buildCommand: pip install -r backend/scrapers/requirements.txt
+    startCommand: python scripts/render_scraper_runner.py
+    plan: free
+    envVars:
+      - key: API_URL
+        fromService:
+          name: anip-api
+          type: web
+          property: url
+      - key: AI_BOT_TOKEN
+        value: "anip-ai-bot-secret-2024"
+      - key: PYTHONPATH
+        value: ".:backend/scrapers"
 
   # Frontend
   - type: web

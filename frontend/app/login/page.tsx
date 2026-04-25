@@ -16,9 +16,10 @@ export default function LoginPage() {
         setError('');
         setLoading(true);
         try {
-            const data = await login(username, password);
+            const data = await login({ username, password });
             if (data.access_token) {
                 localStorage.setItem('token', data.access_token);
+                localStorage.setItem('username', username);
                 window.location.href = '/';
             } else {
                 setError(data.detail || 'The credentials you entered are incorrect.');

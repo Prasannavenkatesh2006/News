@@ -206,6 +206,16 @@ async def process_article_for_alerts(article_id: int):
         await manager.broadcast_alert(alert_data)
         await manager.broadcast_to_feed(alert_data)
         
+        # Broadcast via WhatsApp for high/critical alerts
+        if alert.severity in ("high", "critical"):
+            from anip.shared.notifications import notifier
+            whatsapp_msg = f"🚨 PULSE {alert.severity.upper()} ALERT: {alert.title}\n\n{alert.description[:200]}...\n\nLocation: {alert.location or 'Unknown'}"
+            try:
+                count = notifier.broadcast_alert(db, whatsapp_msg)
+                logger.info(f"WhatsApp broadcast sent to {count} users.")
+            except Exception as e:
+                logger.error(f"Failed to broadcast WhatsApp alert: {e}")
+        
         # Create post in natural-disasters community
         disaster_community = db.query(Community).filter(Community.slug == "natural-disasters").first()
         if disaster_community:

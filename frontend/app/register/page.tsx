@@ -2,13 +2,14 @@
 
 import { useState } from 'react';
 import { register } from '@/lib/api';
-import { UserPlus, User, Mail, KeyRound, Loader2, ArrowRight } from 'lucide-react';
+import { UserPlus, User, Mail, KeyRound, Loader2, ArrowRight, Phone } from 'lucide-react';
 import Link from 'next/link';
 
 export default function RegisterPage() {
     const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [phoneNumber, setPhoneNumber] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
@@ -17,11 +18,17 @@ export default function RegisterPage() {
         setError('');
         setLoading(true);
         try {
-            await register(username, email, password);
+            await register({ 
+                username, 
+                email, 
+                password, 
+                phone_number: phoneNumber 
+            });
             const { login: loginFn } = await import('@/lib/api');
-            const data = await loginFn(username, password);
+            const data = await loginFn({ username, password });
             if (data.access_token) {
                 localStorage.setItem('token', data.access_token);
+                localStorage.setItem('username', username);
                 window.location.href = '/';
             }
         } catch (err: any) {
@@ -88,6 +95,20 @@ export default function RegisterPage() {
                                     placeholder="Min. 6 characters" 
                                     required 
                                     minLength={6}
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Phone Number (for WhatsApp)</label>
+                            <div className="relative">
+                                <Phone className="absolute left-4 top-3.5 w-5 h-5 text-slate-400" />
+                                <input 
+                                    className="w-full bg-slate-50 border-none rounded-2xl py-3.5 pl-12 pr-4 text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-blue-500/20 transition-all font-medium" 
+                                    type="tel" 
+                                    value={phoneNumber} 
+                                    onChange={e => setPhoneNumber(e.target.value)} 
+                                    placeholder="+1234567890" 
                                 />
                             </div>
                         </div>

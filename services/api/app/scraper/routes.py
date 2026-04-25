@@ -286,6 +286,20 @@ async def ingest_scraped_content(
             # Broadcast via WebSocket (background)
             background_tasks.add_task(broadcast_new_post, post_data)
             
+            # Scan for disaster alerts & WhatsApp broadcast (background)
+            try:
+                from app.disaster_alerts import process_article_for_alerts
+                background_tasks.add_task(process_article_for_alerts, article.id)
+                
+                # ALSO: If it's very important news (score > 70), send a "News Flash"
+                if imp_score >= 70:
+                    from anip.shared.notifications import notifier
+                    flash_msg = f"⚡ PULSE NEWS FLASH: {article.title}\n\n{article.source}: {(article.content or '')[:150]}...\n\n🔗 View: {article.url or 'http://localhost:3002'}"
+                    background_tasks.add_task(notifier.broadcast_alert, db, flash_msg)
+                    logger.info(f"📢 Scheduled High-Importance News Flash for: {article.title[:40]}")
+            except Exception as e:
+                logger.error(f"Failed to schedule alert processing: {e}")
+            
             logger.info(f"✅ Auto-posted [{platform}]: {item.title[:60]}")
             return {"success": True, "post_id": str(post.id), "community": comm_name}
     

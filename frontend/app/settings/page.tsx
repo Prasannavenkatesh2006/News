@@ -21,11 +21,18 @@ export default function SettingsPage() {
     const [settings, setSettings] = useState<any>(null);
     const [profile, setProfile] = useState<any>(null);
     const [bio, setBio] = useState('');
+    const [phoneNumber, setPhoneNumber] = useState('');
     const [languages, setLanguages] = useState<any[]>([]);
     const [saved, setSaved] = useState(false);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/login';
+            return;
+        }
+
         Promise.all([
             getSettings().catch(() => null),
             getMyProfile().catch(() => null),
@@ -34,6 +41,7 @@ export default function SettingsPage() {
             setSettings(s);
             setProfile(p);
             setBio(p?.bio || '');
+            setPhoneNumber(p?.phone_number || '');
             setLanguages(l);
         }).finally(() => setLoading(false));
     }, []);
@@ -42,7 +50,7 @@ export default function SettingsPage() {
         if (settings) {
             await updateSettings(settings).catch(() => { });
         }
-        await updateProfile({ bio }).catch(() => { });
+        await updateProfile({ bio, phone_number: phoneNumber }).catch(() => { });
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
     };
@@ -99,6 +107,35 @@ export default function SettingsPage() {
                             rows={3}
                             placeholder="Brief description of your specialization..." 
                         />
+                        <label className="text-xs font-black text-slate-700 uppercase tracking-widest mt-6 mb-2 block flex justify-between items-center">
+                            <span>Phone Number (WhatsApp)</span>
+                            <span className="text-[10px] font-bold text-slate-400 normal-case bg-slate-100 px-2 py-0.5 rounded tracking-normal">Include Country Code</span>
+                        </label>
+                        <input 
+                            type="tel"
+                            className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                            value={phoneNumber} 
+                            onChange={e => setPhoneNumber(e.target.value)} 
+                            placeholder="+1234567890" 
+                        />
+                        {settings?.whatsapp_notifications && (
+                            <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-2xl flex flex-col sm:flex-row items-center gap-6">
+                                <div className="flex-1 text-center sm:text-left">
+                                    <p className="text-sm font-bold text-blue-800 mb-2">🚀 One-Step Setup</p>
+                                    <p className="text-xs font-medium text-blue-700 leading-relaxed">
+                                        To receive real-time intelligence on WhatsApp, please text <span className="bg-white px-2 py-0.5 rounded border border-blue-200 font-bold">join provide-near</span> to <span className="bg-white px-2 py-0.5 rounded border border-blue-200 font-bold">+1 415 523 8886</span>.
+                                    </p>
+                                    <p className="text-[10px] text-blue-500 mt-3 italic">Scan the QR code to open WhatsApp with the message ready!</p>
+                                </div>
+                                <div className="bg-white p-2 rounded-2xl border border-blue-100 shadow-sm">
+                                    <img 
+                                        src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https%3A%2F%2Fwa.me%2F14155238886%3Ftext%3Djoin%2520provide-near" 
+                                        alt="WhatsApp QR Code"
+                                        className="w-24 h-24"
+                                    />
+                                </div>
+                            </div>
+                        )}
                     </section>
 
                     {/* Appearance */}
@@ -168,6 +205,7 @@ export default function SettingsPage() {
                                     { key: 'notify_on_alerts', label: 'Critical Incident Alerts' },
                                     { key: 'email_notifications', label: 'Remote Email Updates' },
                                     { key: 'push_notifications', label: 'Push Sync' },
+                                    { key: 'whatsapp_notifications', label: 'WhatsApp Broadcasts' },
                                 ].map(item => (
                                     <div key={item.key} className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-100">
                                         <span className="text-[11px] font-bold text-slate-700">{item.label}</span>

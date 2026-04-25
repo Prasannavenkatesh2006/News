@@ -21,6 +21,7 @@ class User(Base):
     avatar_url = Column(Text)
     karma = Column(Integer, default=0)
     preferred_language = Column(String(10), default="en")
+    phone_number = Column(String(20), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     posts = relationship("Post", back_populates="author")
@@ -149,6 +150,7 @@ class UserSettings(Base):
     language = Column(String(10), default="en")  # en, es, fr, de, zh, ar, hi, pt, ja, ko
     email_notifications = Column(Boolean, default=True)
     push_notifications = Column(Boolean, default=True)
+    whatsapp_notifications = Column(Boolean, default=True)
     notify_on_votes = Column(Boolean, default=True)
     notify_on_comments = Column(Boolean, default=True)
     notify_on_replies = Column(Boolean, default=True)

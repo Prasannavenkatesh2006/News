@@ -61,6 +61,7 @@ class UserSettingsResponse(BaseModel):
     language: str
     email_notifications: bool
     push_notifications: bool
+    whatsapp_notifications: bool
     notify_on_votes: bool
     notify_on_comments: bool
     notify_on_replies: bool
@@ -75,6 +76,7 @@ class UserSettingsUpdate(BaseModel):
     language: Optional[str] = None
     email_notifications: Optional[bool] = None
     push_notifications: Optional[bool] = None
+    whatsapp_notifications: Optional[bool] = None
     notify_on_votes: Optional[bool] = None
     notify_on_comments: Optional[bool] = None
     notify_on_replies: Optional[bool] = None
@@ -88,6 +90,7 @@ class ProfileUpdate(BaseModel):
     bio: Optional[str] = None
     avatar_url: Optional[str] = None
     preferred_language: Optional[str] = None
+    phone_number: Optional[str] = None
 
 
 class StatsResponse(BaseModel):
@@ -356,6 +359,7 @@ def get_settings(current_user: User = Depends(get_current_user)):
             language=settings.language,
             email_notifications=settings.email_notifications,
             push_notifications=settings.push_notifications,
+            whatsapp_notifications=settings.whatsapp_notifications,
             notify_on_votes=settings.notify_on_votes,
             notify_on_comments=settings.notify_on_comments,
             notify_on_replies=settings.notify_on_replies,
@@ -387,6 +391,7 @@ def update_settings(update: UserSettingsUpdate, current_user: User = Depends(get
             language=settings.language,
             email_notifications=settings.email_notifications,
             push_notifications=settings.push_notifications,
+            whatsapp_notifications=settings.whatsapp_notifications,
             notify_on_votes=settings.notify_on_votes,
             notify_on_comments=settings.notify_on_comments,
             notify_on_replies=settings.notify_on_replies,
@@ -413,6 +418,27 @@ def update_profile(update: ProfileUpdate, current_user: User = Depends(get_curre
             user.avatar_url = update.avatar_url
         if update.preferred_language is not None:
             user.preferred_language = update.preferred_language
+        if update.phone_number is not None:
+            # Basic sanitization for Twilio
+            phone = update.phone_number.strip().replace(" ", "").replace("-", "")
+            if phone:
+                if not phone.startswith('+'):
+                    if len(phone) == 10:
+                        phone = "+91" + phone
+                    else:
+                        phone = "+" + phone
+                user.phone_number = phone
+            else:
+                user.phone_number = None
+
+            # Enable WhatsApp notifications automatically when a phone number is added
+            if user.phone_number:
+                settings = db.query(UserSettings).filter(UserSettings.user_id == user.id).first()
+                if not settings:
+                    settings = UserSettings(user_id=user.id, whatsapp_notifications=True)
+                    db.add(settings)
+                else:
+                    settings.whatsapp_notifications = True
         
         db.commit()
         return {"status": "ok", "username": user.username}

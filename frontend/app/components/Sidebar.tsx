@@ -72,6 +72,7 @@ export default function Sidebar() {
         { name: 'Trending', path: '/trending', icon: <TrendingUp size={20} /> },
         { name: 'Communities', path: '/communities', icon: <Users size={20} /> },
         { name: 'Dashboard', path: '/dashboard', icon: <LayoutDashboard size={20} /> },
+        { name: 'Settings', path: '/settings', icon: <Settings size={20} /> },
     ];
 
     return (
@@ -159,10 +160,7 @@ export default function Sidebar() {
                             <Bookmark size={20} />
                             <span>Bookmarks</span>
                         </Link>
-                        <Link href="/settings" className={`sidebar-link !px-3 ${path === '/settings' ? 'active' : ''}`}>
-                            <Settings size={20} />
-                            <span>Settings</span>
-                        </Link>
+
                         <button onClick={handleLogout} className="sidebar-link !px-3 !text-red-500 hover:bg-red-50">
                             <LogOut size={20} />
                             <span>Logout</span>
