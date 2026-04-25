@@ -40,6 +40,10 @@ services:
         fromDatabase:
           name: anip-db
           property: password
+      - key: REDIS_URL
+        fromRedis:
+          name: anip-redis
+          property: connectionString
       - key: CORS_ORIGINS
         value: "*"
       - key: GOOGLE_API_KEY
@@ -62,10 +66,7 @@ services:
     plan: free
     envVars:
       - key: API_URL
-        fromService:
-          name: anip-api
-          type: web
-          property: url
+        sync: false # User will set this to the anip-api URL
       - key: AI_BOT_TOKEN
         value: "anip-ai-bot-secret-2024"
       - key: PYTHONPATH
@@ -80,7 +81,4 @@ services:
     plan: free
     envVars:
       - key: NEXT_PUBLIC_API_URL
-        fromService:
-          name: anip-api
-          type: web
-          property: url
+        sync: false # User will set this to the anip-api URL
