@@ -1,6 +1,6 @@
 services:
   # Database
-  - type: database
+  - type: postgres
     name: anip-db
     databaseName: anip
     user: anip_user
