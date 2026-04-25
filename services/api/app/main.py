@@ -81,6 +81,19 @@ async def lifespan(app: FastAPI):
             seed_communities()
         except Exception as seed_err:
             logger.warning(f"⚠️ Community seeding skipped: {seed_err}")
+
+        # Start background scrapers if enabled (for Render Free Plan)
+        import os
+        if os.getenv("RUN_SCRAPERS_IN_BACKGROUND") == "true":
+            logger.info("🕵️ Starting Background Scrapers...")
+            try:
+                import threading
+                from scripts.render_scraper_runner import run_scrapers
+                scraper_thread = threading.Thread(target=run_scrapers, daemon=True)
+                scraper_thread.start()
+                logger.info("✅ Background Scraper thread launched")
+            except Exception as scraper_err:
+                logger.error(f"❌ Failed to start background scrapers: {scraper_err}")
         
     except Exception as e:
         logger.error(f"❌ Error during database initialization: {e}", exc_info=True)

@@ -21,7 +21,11 @@ SCRAPER_FILES = [
 
 def run_scrapers():
     """Run all scrapers sequentially in a loop."""
-    logger.info("Starting Render Scraper Runner...")
+    logger.info("Starting Background Scraper Runner...")
+    
+    # Check if we are running inside the API container
+    api_url = os.getenv("API_URL", "http://localhost:8000")
+    os.environ["API_URL"] = api_url # Ensure sub-processes see it
     
     while True:
         for scraper in SCRAPER_FILES:
@@ -32,19 +36,17 @@ def run_scrapers():
                 
             logger.info(f"🚀 Launching scraper: {scraper}")
             try:
-                # We run each scraper as a separate process and wait for it to finish a single run.
-                # Note: We need to modify the scrapers to support a --one-run flag or just run them and kill them.
-                # Actually, many of these have a 'main' that loops.
-                # For Render Worker, we might just want to start them all in parallel if memory allows.
-                process = subprocess.Popen([sys.executable, full_path])
-                # We'll let it run for a while or manage it.
-                # But to save memory on Render Free, let's just run them one by one if they support one-shot.
-                # For now, let's just start the most important ones.
+                # Run each scraper and wait for it to complete one cycle
+                # Note: These scrapers usually have an internal loop, so we run them for a bit then rotate
+                # OR we modify them to run once. For now, let's just start them.
+                subprocess.run([sys.executable, full_path], timeout=300) # Give each 5 mins
+            except subprocess.TimeoutExpired:
+                logger.info(f"⏰ Scraper {scraper} timeout (normal rotation)")
             except Exception as e:
                 logger.error(f"Failed to start {scraper}: {e}")
         
-        # Keep the master process alive
-        time.sleep(3600) # Wait an hour before checking/restarting if any crashed
+        logger.info("💤 Scraper cycle complete. Sleeping for 10 minutes...")
+        time.sleep(600) 
 
 if __name__ == "__main__":
     run_scrapers()

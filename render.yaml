@@ -13,7 +13,7 @@ services:
       - source: 0.0.0.0/0
         description: Allow all
 
-  # Backend (API)
+  # Backend (API + Scrapers merged)
   - type: web
     name: anip-api
     env: docker
@@ -59,21 +59,8 @@ services:
         value: "REPLACE_ME_IN_DASHBOARD"
       - key: TWILIO_WHATSAPP_NUMBER
         value: "REPLACE_ME_IN_DASHBOARD"
-
-  # Scrapers (Background Worker)
-  - type: worker
-    name: anip-scrapers
-    env: python
-    buildCommand: pip install -r backend/scrapers/requirements.txt
-    startCommand: python scripts/render_scraper_runner.py
-    plan: free
-    envVars:
-      - key: API_URL
-        value: "REPLACE_ME_WITH_API_URL"
-      - key: AI_BOT_TOKEN
-        value: "anip-ai-bot-secret-2024"
-      - key: PYTHONPATH
-        value: ".:backend/scrapers"
+      - key: RUN_SCRAPERS_IN_BACKGROUND
+        value: "true"
 
   # Frontend
   - type: web

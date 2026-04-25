@@ -23,6 +23,8 @@ RUN uv pip install --system -e ".[api]" && uv pip install --system email-validat
 
 # Copy application code
 COPY services/api/app /opt/anip/services/api/app
+COPY backend/scrapers /opt/anip/backend/scrapers
+COPY scripts/render_scraper_runner.py /opt/anip/scripts/render_scraper_runner.py
 
 # Copy scripts (for community seeding etc.)
 COPY scripts/ /opt/anip/scripts/
