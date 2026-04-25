@@ -5,6 +5,12 @@ databases:
     plan: free
 
 services:
+  # Redis
+  - type: redis
+    name: anip-redis
+    plan: free
+    ipAllowList: []
+
   # Backend (API)
   - type: web
     name: anip-api
