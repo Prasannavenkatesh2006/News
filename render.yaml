@@ -1,17 +1,10 @@
-services:
-  # Database
-  - type: postgres
-    name: anip-db
+databases:
+  - name: anip-db
     databaseName: anip
     user: anip_user
-    plan: free # Change to starter or higher if needed
+    plan: free
 
-  # Redis
-  - type: redis
-    name: anip-redis
-    plan: free # Change to starter or higher if needed
-    ipAllowList: [] # Only allow internal connections
-
+services:
   # Backend (API)
   - type: web
     name: anip-api
@@ -19,7 +12,7 @@ services:
     dockerContext: .
     dockerfilePath: services/api/Dockerfile
     plan: free
-    healthCheckPath: /health # Verify if this exists in the app
+    healthCheckPath: /health
     envVars:
       - key: POSTGRES_HOST
         fromDatabase:
@@ -41,10 +34,6 @@ services:
         fromDatabase:
           name: anip-db
           property: password
-      - key: REDIS_URL
-        fromRedis:
-          name: anip-redis
-          property: connectionString
       - key: CORS_ORIGINS
         value: "*"
       - key: GOOGLE_API_KEY
