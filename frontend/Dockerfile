@@ -7,7 +7,7 @@ RUN npm install
 
 COPY . .
 
-ENV NEXT_PUBLIC_API_URL=http://localhost:8000
+# Build-time environment variables will be provided by Render dashboard settings
 ENV NODE_OPTIONS="--max-old-space-size=400"
 ENV NEXT_TELEMETRY_DISABLED=1
 
