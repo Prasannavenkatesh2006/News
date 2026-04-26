@@ -3,7 +3,7 @@
  * This file handles all communication with the FastAPI backend.
  */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
+const API_URL = 'https://anip-api-giq5.onrender.com';
 
 /**
  * Core fetch wrapper that handles Auth headers and error responses.

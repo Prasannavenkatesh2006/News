@@ -21,7 +21,7 @@ export function useLiveFeed() {
   const bufferRef = useRef<AutoPost[]>([]);
 
   useEffect(() => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8010';
+    const apiUrl = 'https://anip-api-giq5.onrender.com';
     const wsUrl = apiUrl.replace('http', 'ws') + '/ws/live-feed';
     
     let ws: WebSocket;

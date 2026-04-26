@@ -7,7 +7,7 @@ RUN npm install
 
 COPY . .
 
-# Build-time environment variables will be provided by Render dashboard settings
+ENV NEXT_PUBLIC_API_URL=https://anip-api-giq5.onrender.com
 ENV NODE_OPTIONS="--max-old-space-size=400"
 ENV NEXT_TELEMETRY_DISABLED=1
 

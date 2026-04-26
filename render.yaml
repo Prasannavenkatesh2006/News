@@ -71,4 +71,4 @@ services:
     plan: free
     envVars:
       - key: NEXT_PUBLIC_API_URL
-        value: "REPLACE_ME_WITH_API_URL"
+        value: "https://anip-api-giq5.onrender.com"
